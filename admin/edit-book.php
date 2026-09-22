@@ -1,32 +1,35 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
-if(strlen($_SESSION['alogin'])==0)
-    {   
-header('location:index.php');
-}
-else{ 
-
-if(isset($_POST['update']))
-{
+require_once __DIR__ . '/includes/config.php';
+lms_require_admin();
+if (isset($_POST['update'])) {
+    lms_csrf_verify();
 $bookname=$_POST['bookname'];
 $category=$_POST['category'];
 $author=$_POST['author'];
 $isbn=$_POST['isbn'];
 $price=$_POST['price'];
-$bookid=intval($_GET['bookid']);
-$sql="update  tblbooks set BookName=:bookname,CatId=:category,AuthorId=:author,ISBNNumber=:isbn,BookPrice=:price where id=:bookid";
+$bookid   = intval($_GET['bookid']);
+$authorId = (int) $author;
+
+// Keep the denormalised Author column in step with the chosen author row.
+$sql = "UPDATE tblbooks SET BookName = :bookname, CatId = :category,
+               AuthorId = :authorid,
+               Author = (SELECT AuthorName FROM tblauthors WHERE id = :authorid2),
+               ISBNNumber = :isbn, BookPrice = :price
+        WHERE id = :bookid";
 $query = $dbh->prepare($sql);
-$query->bindParam(':bookname',$bookname,PDO::PARAM_STR);
-$query->bindParam(':category',$category,PDO::PARAM_STR);
-$query->bindParam(':author',$author,PDO::PARAM_STR);
-$query->bindParam(':isbn',$isbn,PDO::PARAM_STR);
-$query->bindParam(':price',$price,PDO::PARAM_STR);
-$query->bindParam(':bookid',$bookid,PDO::PARAM_STR);
-$query->execute();
-$_SESSION['msg']="Book info updated successfully";
+$query->execute([
+    ':bookname'  => $bookname,
+    ':category'  => (int) $category,
+    ':authorid'  => $authorId,
+    ':authorid2' => $authorId,
+    ':isbn'      => $isbn,
+    ':price'     => (float) $price,
+    ':bookid'    => $bookid,
+]);
+lms_flash_set('msg', 'Book updated successfully.');
 header('location:manage-books.php');
+exit();
 
 
 }
@@ -46,7 +49,7 @@ header('location:manage-books.php');
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 
 </head>
 <body>
@@ -71,8 +74,8 @@ Book Info
 </div>
 <div class="panel-body">
 <form role="form" method="post">
+<?php echo lms_csrf_field(); ?>
 <?php 
-$bookid=intval($_GET['bookid']);
 $sql = "SELECT tblbooks.BookName,tblcategory.CategoryName,tblcategory.id as cid,tblauthors.AuthorName,tblauthors.id as athrid,tblbooks.ISBNNumber,tblbooks.BookPrice,tblbooks.id as bookid from  tblbooks join tblcategory on tblcategory.id=tblbooks.CatId join tblauthors on tblauthors.id=tblbooks.AuthorId where tblbooks.id=:bookid";
 $query = $dbh -> prepare($sql);
 $query->bindParam(':bookid',$bookid,PDO::PARAM_STR);
@@ -86,13 +89,13 @@ foreach($results as $result)
 
 <div class="form-group">
 <label>Book Name<span style="color:red;">*</span></label>
-<input class="form-control" type="text" name="bookname" value="<?php echo htmlentities($result->BookName);?>" required />
+<input class="form-control" type="text" name="bookname" value="<?php echo e($result->BookName);?>" required />
 </div>
 
 <div class="form-group">
 <label> Category<span style="color:red;">*</span></label>
 <select class="form-control" name="category" required="required">
-<option value="<?php echo htmlentities($result->cid);?>"> <?php echo htmlentities($catname=$result->CategoryName);?></option>
+<option value="<?php echo e($result->cid);?>"> <?php echo htmlentities($catname=$result->CategoryName);?></option>
 <?php 
 $status=1;
 $sql1 = "SELECT * from  tblcategory where Status=:status";
@@ -120,7 +123,7 @@ else
 <div class="form-group">
 <label> Author<span style="color:red;">*</span></label>
 <select class="form-control" name="author" required="required">
-<option value="<?php echo htmlentities($result->athrid);?>"> <?php echo htmlentities($athrname=$result->AuthorName);?></option>
+<option value="<?php echo e($result->athrid);?>"> <?php echo htmlentities($athrname=$result->AuthorName);?></option>
 <?php 
 
 $sql2 = "SELECT * from  tblauthors ";
@@ -144,13 +147,13 @@ continue;
 
 <div class="form-group">
 <label>ISBN Number<span style="color:red;">*</span></label>
-<input class="form-control" type="text" name="isbn" value="<?php echo htmlentities($result->ISBNNumber);?>"  required="required" />
+<input class="form-control" type="text" name="isbn" value="<?php echo e($result->ISBNNumber);?>"  required="required" />
 <p class="help-block">An ISBN is an International Standard Book Number.ISBN Must be unique</p>
 </div>
 
  <div class="form-group">
  <label>Price in INR<span style="color:red;">*</span></label>
- <input class="form-control" type="text" name="price" value="<?php echo htmlentities($result->BookPrice);?>"   required="required" />
+ <input class="form-control" type="text" name="price" value="<?php echo e($result->BookPrice);?>"   required="required" />
  </div>
  <?php }} ?>
 <button type="submit" name="update" class="btn btn-info">Update </button>
@@ -176,4 +179,3 @@ continue;
     <script src="assets/js/custom.js"></script>
 </body>
 </html>
-<?php } ?>

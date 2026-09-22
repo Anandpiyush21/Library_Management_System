@@ -10,7 +10,7 @@
                 <img src="assets/img/logo_1.png" width="420" height="78" />
             </a>
         </div>
-        <?php if ($_SESSION['login']) { ?>
+        <?php if (!empty($_SESSION['login'])) { ?>
             <div class="right-div">
                 <a href="logout.php" class="btn btn-danger pull-right">LOG OUT</a>
             </div>
@@ -18,7 +18,7 @@
     </div>
 </div>
 <!-- LOGO HEADER END-->
-<?php if ($_SESSION['login']) { ?>
+<?php if (!empty($_SESSION['login'])) { ?>
     <section class="menu-section">
         <div class="container">
             <div class="row ">

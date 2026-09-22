@@ -1,26 +1,22 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
-if(strlen($_SESSION['login'])==0)
-    {   
-header('location:index.php');
-}
-else{ 
-if(isset($_GET['del']))
-{
-$id=$_GET['del'];
-$sql = "delete from tblbooks  WHERE id=:id";
+require_once __DIR__ . '/includes/config.php';
+$studentId = lms_require_student();
+
+// NOTE: earlier revisions of this page accepted ?del=<id> and deleted the
+// matching row from tblbooks — any logged-in member could wipe the catalogue.
+// Deleting titles is an administrative action and now lives only in
+// admin/manage-books.php, behind an admin session and a CSRF-protected POST.
+
+$sql = "SELECT b.BookName, b.ISBNNumber, i.IssuesDate, i.ReturnDate,
+               i.id AS rid, i.fine, i.RetrunStatus
+        FROM tblissuedbookdetails i
+        JOIN tblbooks b ON b.id = i.BookId
+        WHERE i.StudentID = :sid
+        ORDER BY i.id DESC";
 $query = $dbh->prepare($sql);
-$query -> bindParam(':id',$id, PDO::PARAM_STR);
-$query -> execute();
-$_SESSION['delmsg']="Category deleted scuccessfully ";
-header('location:manage-books.php');
-
-}
-
-
-    ?>
+$query->execute([':sid' => $studentId]);
+$loans = $query->fetchAll();
+?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
@@ -28,7 +24,7 @@ header('location:manage-books.php');
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="" />
     <meta name="author" content="" />
-    <title>IIIT Raichur | Manage Issued Books</title>
+    <title>IIIT Raichur | My Issued Books</title>
     <!-- BOOTSTRAP CORE STYLE  -->
     <link href="assets/css/bootstrap.css" rel="stylesheet" />
     <!-- FONT AWESOME STYLE  -->
@@ -38,7 +34,7 @@ header('location:manage-books.php');
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 
 </head>
 <body>
@@ -49,7 +45,7 @@ header('location:manage-books.php');
          <div class="container">
         <div class="row pad-botm">
             <div class="col-md-12">
-                <h4 class="header-line">Manage Issued Books</h4>
+                <h4 class="header-line">My Issued Books</h4>
     </div>
     
 
@@ -58,7 +54,7 @@ header('location:manage-books.php');
                     <!-- Advanced Tables -->
                     <div class="panel panel-default">
                         <div class="panel-heading">
-                          Issued Books 
+                          Books issued to <?php echo e($studentId); ?> (loan period: <?php echo e(LOAN_PERIOD_DAYS); ?> days, fine <?php echo e(number_format(FINE_PER_DAY, 2)); ?>/day)
                         </div>
                         <div class="panel-body">
                             <div class="table-responsive">
@@ -69,41 +65,36 @@ header('location:manage-books.php');
                                             <th>Book Name</th>
                                             <th>ISBN </th>
                                             <th>Issued Date</th>
-                                            <th>Return Date</th>
-                                            <th>Fine in(INR)</th>
+                                            <th>Due Date</th>
+                                            <th>Status / Returned On</th>
+                                            <th>Fine (INR)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-<?php 
-$sid=$_SESSION['stdid'];
-$sql="SELECT tblbooks.BookName,tblbooks.ISBNNumber,tblissuedbookdetails.IssuesDate,tblissuedbookdetails.ReturnDate,tblissuedbookdetails.id as rid,tblissuedbookdetails.fine from  tblissuedbookdetails join tblstudents on tblstudents.StudentId=tblissuedbookdetails.StudentId join tblbooks on tblbooks.id=tblissuedbookdetails.BookId where tblstudents.StudentId=:sid order by tblissuedbookdetails.id desc";
-$query = $dbh -> prepare($sql);
-$query-> bindParam(':sid', $sid, PDO::PARAM_STR);
-$query->execute();
-$results=$query->fetchAll(PDO::FETCH_OBJ);
-$cnt=1;
-if($query->rowCount() > 0)
-{
-foreach($results as $result)
-{               ?>                                      
+<?php $cnt = 1; foreach ($loans as $loan) {
+    $due      = lms_due_date($loan->IssuesDate);
+    $returned = (int) $loan->RetrunStatus === 1;
+    $overdue  = !$returned && lms_days_overdue($loan->IssuesDate) > 0;
+    $accruing = $returned ? (float) $loan->fine : lms_calculate_fine($loan->IssuesDate);
+?>
                                         <tr class="odd gradeX">
-                                            <td class="center"><?php echo htmlentities($cnt);?></td>
-                                            <td class="center"><?php echo htmlentities($result->BookName);?></td>
-                                            <td class="center"><?php echo htmlentities($result->ISBNNumber);?></td>
-                                            <td class="center"><?php echo htmlentities($result->IssuesDate);?></td>
-                                            <td class="center"><?php if($result->ReturnDate=="")
-                                            {?>
-                                            <span style="color:red">
-                                             <?php   echo htmlentities("Not Return Yet"); ?>
-                                                </span>
-                                            <?php } else {
-                                            echo htmlentities($result->ReturnDate);
-                                        }
-                                            ?></td>
-                                              <td class="center"><?php echo htmlentities($result->fine);?></td>
-                                         
+                                            <td class="center"><?php echo e($cnt); ?></td>
+                                            <td class="center"><?php echo e($loan->BookName); ?></td>
+                                            <td class="center"><?php echo e($loan->ISBNNumber); ?></td>
+                                            <td class="center"><?php echo e($loan->IssuesDate); ?></td>
+                                            <td class="center"><?php echo e($due->format('d M Y')); ?></td>
+                                            <td class="center">
+                                            <?php if ($returned) { ?>
+                                                <?php echo e($loan->ReturnDate); ?>
+                                            <?php } elseif ($overdue) { ?>
+                                                <span style="color:red">Overdue by <?php echo e(lms_days_overdue($loan->IssuesDate)); ?> day(s)</span>
+                                            <?php } else { ?>
+                                                <span style="color:#3c763d">On loan</span>
+                                            <?php } ?>
+                                            </td>
+                                            <td class="center"><?php echo number_format($accruing, 2); ?></td>
                                         </tr>
- <?php $cnt=$cnt+1;}} ?>                                      
+<?php $cnt++; } ?>                                      
                                     </tbody>
                                 </table>
                             </div>
@@ -136,4 +127,3 @@ foreach($results as $result)
 
 </body>
 </html>
-<?php } ?>

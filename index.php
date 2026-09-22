@@ -1,41 +1,38 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
-if($_SESSION['login']!=''){
-$_SESSION['login']='';
-}
-if(isset($_POST['login']))
-{
+require_once __DIR__ . '/includes/config.php';
+lms_session_start();
 
-$email=$_POST['emailid'];
-$password=md5($_POST['password']);
-$sql ="SELECT EmailId,Password,StudentId,Status FROM tblstudents WHERE EmailId=:email and Password=:password";
-$query= $dbh -> prepare($sql);
-$query-> bindParam(':email', $email, PDO::PARAM_STR);
-$query-> bindParam(':password', $password, PDO::PARAM_STR);
-$query-> execute();
-$results=$query->fetchAll(PDO::FETCH_OBJ);
+$error = '';
 
-if($query->rowCount() > 0)
-{
- foreach ($results as $result) {
- $_SESSION['stdid']=$result->StudentId;
-if($result->Status==1)
-{
-$_SESSION['login']=$_POST['emailid'];
-echo "<script type='text/javascript'> document.location ='dashboard.php'; </script>";
-} else {
-echo "<script>alert('Your Account Has been blocked .Please contact admin');</script>";
+if (isset($_POST['login'])) {
+    lms_csrf_verify();
+    $email    = trim($_POST['emailid'] ?? '');
+    $password = $_POST['password'] ?? '';
 
-}
-}
+    $sql = "SELECT StudentId, EmailId, Password, Status FROM tblstudents WHERE EmailId = :email";
+    $query = $dbh->prepare($sql);
+    $query->bindParam(':email', $email, PDO::PARAM_STR);
+    $query->execute();
+    $student = $query->fetch();
 
-} 
-
-else{
-echo "<script>alert('Invalid Details');</script>";
-}
+    if ($student && lms_verify_password($password, $student->Password)) {
+        if ((int) $student->Status !== 1) {
+            $error = 'Your account has been blocked. Please contact the librarian.';
+        } else {
+            if (lms_password_needs_rehash($student->Password)) {
+                lms_upgrade_password($dbh, 'tblstudents', 'EmailId', $student->EmailId, $password);
+            }
+            session_regenerate_id(true);           // defeat session fixation
+            $_SESSION['login'] = $student->EmailId;
+            $_SESSION['stdid'] = $student->StudentId;
+            header('location:dashboard.php');
+            exit();
+        }
+    } else {
+        // One message for both cases, so the form cannot be used to
+        // enumerate which e-mail addresses are registered.
+        $error = 'Invalid e-mail address or password.';
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -45,7 +42,7 @@ echo "<script>alert('Invalid Details');</script>";
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="" />
     <meta name="author" content="" />
-    <title>IIIT Raichur | </title>
+    <title>IIIT Raichur | Member Login</title>
     <!-- BOOTSTRAP CORE STYLE  -->
     <link href="assets/css/bootstrap.css" rel="stylesheet" />
     <!-- FONT AWESOME STYLE  -->
@@ -53,7 +50,7 @@ echo "<script>alert('Invalid Details');</script>";
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 
 </head>
 <body>
@@ -64,7 +61,7 @@ echo "<script>alert('Invalid Details');</script>";
 <div class="container">
 <div class="row pad-botm">
 <div class="col-md-12">
-<h4 class="header-line">USER LOGIN FORM</h4>
+<h4 class="header-line">Member Login</h4>
 </div>
 </div>
              
@@ -77,6 +74,10 @@ echo "<script>alert('Invalid Details');</script>";
 </div>
 <div class="panel-body">
 <form role="form" method="post">
+<?php echo lms_csrf_field(); ?>
+<?php if ($error !== '') { ?>
+<div class="alert alert-danger"><?php echo e($error); ?></div>
+<?php } ?>
 
 <div class="form-group">
 <label>Enter Email id</label>
@@ -85,11 +86,11 @@ echo "<script>alert('Invalid Details');</script>";
 <div class="form-group">
 <label>Password</label>
 <input class="form-control" type="password" name="password" required autocomplete="off"  />
-<p class="help-block"><a href="user-forgot-password.php">Forgot Password</a></p>
+<p class="help-block">Forgotten your password? Ask the librarian to reset it.</p>
 </div>
 
 
- <button type="submit" name="login" class="btn btn-info">LOGIN </button> | <a href="signup.php">Not Register Yet</a>
+ <button type="submit" name="login" class="btn btn-info">LOGIN </button> | <a href="signup.php">Not registered yet?</a>
 </form>
  </div>
 </div>

@@ -1,0 +1,262 @@
+{
+ "fuzz": {
+  "iterations": 20000,
+  "seconds": 5.5,
+  "counts": {
+   "issue_ok": 5115,
+   "issue_refused": 5962,
+   "return_ok": 5111,
+   "return_refused": 401,
+   "block": 623,
+   "unblock": 597,
+   "delete_refused": 99,
+   "delete_ok": 711
+  },
+  "refusals": {
+   "no copies": 314,
+   "member blocked": 5630,
+   "already holds title": 12,
+   "loan limit": 6
+  },
+  "ledger_rows": 5115,
+  "still_out": 4,
+  "fines": 201030.0
+ },
+ "fine_curve": [
+  [
+   0,
+   0.0
+  ],
+  [
+   1,
+   0.0
+  ],
+  [
+   2,
+   0.0
+  ],
+  [
+   3,
+   0.0
+  ],
+  [
+   4,
+   0.0
+  ],
+  [
+   5,
+   0.0
+  ],
+  [
+   6,
+   0.0
+  ],
+  [
+   7,
+   0.0
+  ],
+  [
+   8,
+   0.0
+  ],
+  [
+   9,
+   0.0
+  ],
+  [
+   10,
+   0.0
+  ],
+  [
+   11,
+   0.0
+  ],
+  [
+   12,
+   0.0
+  ],
+  [
+   13,
+   0.0
+  ],
+  [
+   14,
+   0.0
+  ],
+  [
+   15,
+   5.0
+  ],
+  [
+   16,
+   10.0
+  ],
+  [
+   17,
+   15.0
+  ],
+  [
+   18,
+   20.0
+  ],
+  [
+   19,
+   25.0
+  ],
+  [
+   20,
+   30.0
+  ],
+  [
+   21,
+   35.0
+  ],
+  [
+   22,
+   40.0
+  ],
+  [
+   23,
+   45.0
+  ],
+  [
+   24,
+   50.0
+  ],
+  [
+   25,
+   55.0
+  ],
+  [
+   26,
+   60.0
+  ],
+  [
+   27,
+   65.0
+  ],
+  [
+   28,
+   70.0
+  ],
+  [
+   29,
+   75.0
+  ],
+  [
+   30,
+   80.0
+  ]
+ ],
+ "race": {
+  "trials": 40,
+  "threads": 8,
+  "limit": 3,
+  "before": [
+   4,
+   8,
+   8,
+   8,
+   3,
+   7,
+   6,
+   5,
+   4,
+   7,
+   7,
+   6,
+   5,
+   6,
+   3,
+   8,
+   7,
+   4,
+   7,
+   6,
+   5,
+   8,
+   6,
+   5,
+   5,
+   8,
+   7,
+   8,
+   4,
+   8,
+   7,
+   7,
+   4,
+   7,
+   7,
+   5,
+   7,
+   5,
+   4,
+   5
+  ],
+  "after": [
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3
+  ],
+  "before_violations": 38,
+  "after_violations": 0,
+  "before_worst": 8,
+  "after_worst": 3
+ },
+ "last_copy": {
+  "threads": 12,
+  "winners": 1,
+  "losers": 11,
+  "shelf": 0,
+  "ledger": 1
+ },
+ "static": {
+  "schema": "Schema parsed:\n  admin                    6 columns\n  tblcategory              5 columns\n  tblauthors               4 columns\n  tblbooks                 10 columns\n  tblstudents              10 columns\n  tblissuedbookdetails     7 columns\n  tblrequest               7 columns\n\n62 SQL statements found in 40 PHP files\n\n==============================================================================\nNo schema mismatches: every table and column referenced by the PHP exists.\n",
+  "bind": "Checked 50 parameterised statements\n==============================================================================\nEvery declared placeholder is bound, and nothing extra is bound.\n",
+  "guard": "page                               guard    POSTh  verify  forms  fields\n-------------------------------------------------------------------------\nadmin/add-book.php                 admin        1       1      1       1\nadmin/add-category.php             admin        1       1      1       1\nadmin/book-request.php             admin        1       1      2       2\nadmin/change-password.php          admin        1       1      1       1\nadmin/dashboard.php                admin        0       0      0       0\nadmin/edit-author.php              admin        1       1      1       1\nadmin/edit-book.php                admin        1       1      1       1\nadmin/edit-category.php            admin        1       1      1       1\nadmin/get_book.php                 admin        0       0      0       0\nadmin/get_student.php              admin        0       0      0       0\nadmin/index.php                    -            1       1      1       1\nadmin/issue-book.php               admin        1       1      1       1\nadmin/logout.php                   -            0       0      0       0\nadmin/mail-student.php             admin        1       1      1       1\nadmin/manage-authors.php           admin        1       1      1       1\nadmin/manage-books.php             admin        1       1      1       1\nadmin/manage-categories.php        admin        1       1      1       1\nadmin/manage-issued-books.php      admin        0       0      0       0\nadmin/reg-students.php             admin        1       1      1       1\nadmin/update-issue-bookdeails.php  admin        2       1      1       1\nadminlogin.php                     -            1       1      1       1\navailable-books.php                student      0       0      0       0\nbook-requests.php                  student      1       1      1       1\nchange-password.php                student      1       1      1       1\ncheck_availability.php             -            0       0      0       0\ndashboard.php                      student      0       0      0       0\nindex.php                          -            1       1      1       1\nissued-books.php                   student      0       0      0       0\nlogout.php                         -            0       0      0       0\nmy-profile.php                     student      1       1      1       1\nsignup.php                         -            1       1      1       1\n\n==============================================================================\nEvery non-public page is guarded; every POST handler verifies CSRF; every POST form carries a token.\n"
+ },
+ "repo": {
+  "php_files": 41,
+  "php_loc": 4351,
+  "diffstat": "53 files changed, 5899 insertions(+), 3791 deletions(-)",
+  "tables": 7
+ }
+}

@@ -1,39 +1,42 @@
-<?php 
-require_once("includes/config.php");
-if(!empty($_POST["studentid"])) {
-  $studentid= strtoupper($_POST["studentid"]);
- 
-    $sql ="SELECT FullName,Status FROM tblstudents WHERE StudentId=:studentid";
-$query= $dbh -> prepare($sql);
-$query-> bindParam(':studentid', $studentid, PDO::PARAM_STR);
-$query-> execute();
-$results = $query -> fetchAll(PDO::FETCH_OBJ);
-$cnt=1;
-if($query -> rowCount() > 0)
-{
-foreach ($results as $result) {
-if($result->Status==0)
-{
-echo "<span style='color:red'> Student ID Blocked </span>"."<br />";
-echo "<b>Student Name-</b>" .$result->FullName;
- echo "<script>$('#submit').prop('disabled',true);</script>";
+<?php
+/**
+ * AJAX endpoint: look up a member by library card number.
+ * Returns an HTML fragment that issue-book.php drops next to the ID field.
+ */
+require_once __DIR__ . '/includes/config.php';
+lms_require_admin();
+
+header('Content-Type: text/html; charset=utf-8');
+
+$studentid = strtoupper(trim($_POST['studentid'] ?? ''));
+if ($studentid === '') {
+    exit('<span style="color:red">Please enter a library card number.</span>');
+}
+
+$query = $dbh->prepare('SELECT FullName, Status FROM tblstudents WHERE StudentId = :studentid');
+$query->execute([':studentid' => $studentid]);
+$student = $query->fetch();
+
+if (!$student) {
+    echo '<span style="color:red">No member found with that card number.</span>';
+    echo '<script>$("#submit").prop("disabled", true);</script>';
+    exit();
+}
+
+if ((int) $student->Status !== 1) {
+    echo '<span style="color:red">This member is blocked.</span><br />';
+    echo '<b>Member:</b> ' . e($student->FullName);
+    echo '<script>$("#submit").prop("disabled", true);</script>';
+    exit();
+}
+
+$openLoans = lms_open_loan_count($dbh, $studentid);
+echo '<b>Member:</b> ' . e($student->FullName)
+   . ' &nbsp;<span class="text-muted">(' . $openLoans . ' of ' . MAX_BOOKS_PER_USER . ' books on loan)</span>';
+
+if ($openLoans >= MAX_BOOKS_PER_USER) {
+    echo '<br /><span style="color:red">Loan limit reached — a book must be returned first.</span>';
+    echo '<script>$("#submit").prop("disabled", true);</script>';
 } else {
-?>
-
-
-<?php  
-echo htmlentities($result->FullName);
- echo "<script>$('#submit').prop('disabled',false);</script>";
+    echo '<script>$("#submit").prop("disabled", false);</script>';
 }
-}
-}
- else{
-  
-  echo "<span style='color:red'> Invaid Student Id. Please Enter Valid Student id .</span>";
- echo "<script>$('#submit').prop('disabled',true);</script>";
-}
-}
-
-
-
-?>

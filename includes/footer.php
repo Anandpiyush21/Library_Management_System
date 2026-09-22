@@ -2,7 +2,7 @@
         <div class="container">
             <div class="row">
                 <div class="col-md-12">
-                   &copy; IIIT Raichur </a> 
+                   &copy; <?php echo date('Y'); ?> IIIT Raichur &mdash; Library Management System
                 </div>
 
             </div>

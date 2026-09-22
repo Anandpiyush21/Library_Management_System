@@ -1,0 +1,22 @@
+# Local configuration and credentials
+includes/config.local.php
+
+# PHP / server artefacts
+*.log
+php_errors.log
+.php-cs-fixer.cache
+vendor/
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Database dumps taken from a running instance
+*.sql.bak
+database/*-dump.sql
+__pycache__/
+*.pyc
+docs/report/figs/

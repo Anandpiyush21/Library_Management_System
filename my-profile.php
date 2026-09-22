@@ -1,28 +1,28 @@
-<?php 
-session_start();
-include('includes/config.php');
-error_reporting(0);
-if(strlen($_SESSION['login'])==0)
-    {   
-header('location:index.php');
+<?php
+require_once __DIR__ . '/includes/config.php';
+$studentId = lms_require_student();
+
+$error = '';
+$msg   = '';
+
+if (isset($_POST['update'])) {
+    lms_csrf_verify();
+    $fname    = trim($_POST['fullanme'] ?? '');
+    $mobileno = trim($_POST['mobileno'] ?? '');
+
+    if ($fname === '') {
+        $error = 'Your name cannot be empty.';
+    } elseif (!preg_match('/^[0-9]{10}$/', $mobileno)) {
+        $error = 'Mobile number must be exactly 10 digits.';
+    } else {
+        $sql = "UPDATE tblstudents SET FullName = :fname, MobileNumber = :mobileno
+                WHERE StudentId = :sid";
+        $dbh->prepare($sql)->execute([
+            ':fname' => $fname, ':mobileno' => $mobileno, ':sid' => $studentId,
+        ]);
+        $msg = 'Your profile has been updated.';
+    }
 }
-else{ 
-if(isset($_POST['update']))
-{    
-$sid=$_SESSION['stdid'];  
-$fname=$_POST['fullanme'];
-$mobileno=$_POST['mobileno'];
-
-$sql="update tblstudents set FullName=:fname,MobileNumber=:mobileno where StudentId=:sid";
-$query = $dbh->prepare($sql);
-$query->bindParam(':sid',$sid,PDO::PARAM_STR);
-$query->bindParam(':fname',$fname,PDO::PARAM_STR);
-$query->bindParam(':mobileno',$mobileno,PDO::PARAM_STR);
-$query->execute();
-
-echo '<script>alert("Your profile has been updated")</script>';
-}
-
 ?>
 
 <!DOCTYPE html>
@@ -35,7 +35,7 @@ echo '<script>alert("Your profile has been updated")</script>';
     <!--[if IE]>
         <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
         <![endif]-->
-    <title>IIIT Raichur | Student Signup</title>
+    <title>IIIT Raichur | My Profile</title>
     <!-- BOOTSTRAP CORE STYLE  -->
     <link href="assets/css/bootstrap.css" rel="stylesheet" />
 
@@ -43,7 +43,7 @@ echo '<script>alert("Your profile has been updated")</script>';
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' /> 
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' /> 
 
 </head>
 <body>
@@ -68,9 +68,15 @@ echo '<script>alert("Your profile has been updated")</script>';
                         </div>
                         <div class="panel-body">
                             <form name="signup" method="post">
+                                <?php echo lms_csrf_field(); ?>
+                                <?php if ($error !== '') { ?>
+                                    <div class="alert alert-danger"><?php echo e($error); ?></div>
+                                <?php } elseif ($msg !== '') { ?>
+                                    <div class="alert alert-success"><?php echo e($msg); ?></div>
+                                <?php } ?>
 <?php 
-$sid=$_SESSION['stdid'];
-$sql="SELECT StudentId,FullName,EmailId,MobileNumber,RegDate,UpdationDate,Status from  tblstudents  where StudentId=:sid ";
+$sid = $studentId;
+$sql="SELECT StudentId,FullName,EmailId,MobileNumber,RegDate,UpdationDate,Status,fines from  tblstudents  where StudentId=:sid ";
 $query = $dbh -> prepare($sql);
 $query-> bindParam(':sid', $sid, PDO::PARAM_STR);
 $query->execute();
@@ -83,20 +89,25 @@ foreach($results as $result)
 
 <div class="form-group">
 <label>Student ID : </label>
-<?php echo htmlentities($result->StudentId);?>
+<?php echo e($result->StudentId);?>
 </div>
 
 <div class="form-group">
 <label>Reg Date : </label>
-<?php echo htmlentities($result->RegDate);?>
+<?php echo e($result->RegDate);?>
 </div>
 <?php if($result->UpdationDate!=""){?>
 <div class="form-group">
 <label>Last Updation Date : </label>
-<?php echo htmlentities($result->UpdationDate);?>
+<?php echo e($result->UpdationDate);?>
 </div>
 <?php } ?>
 
+
+<div class="form-group">
+<label>Outstanding Fine (INR) : </label>
+<?php echo e(number_format((float) $result->fines, 2)); ?>
+</div>
 
 <div class="form-group">
 <label>Profile Status : </label>
@@ -110,18 +121,18 @@ foreach($results as $result)
 
 <div class="form-group">
 <label>Enter Full Name</label>
-<input class="form-control" type="text" name="fullanme" value="<?php echo htmlentities($result->FullName);?>" autocomplete="off" required />
+<input class="form-control" type="text" name="fullanme" value="<?php echo e($result->FullName);?>" autocomplete="off" required />
 </div>
 
 
 <div class="form-group">
 <label>Mobile Number :</label>
-<input class="form-control" type="text" name="mobileno" maxlength="10" value="<?php echo htmlentities($result->MobileNumber);?>" autocomplete="off" required />
+<input class="form-control" type="text" name="mobileno" maxlength="10" pattern="[0-9]{10}" value="<?php echo e($result->MobileNumber);?>" autocomplete="off" required />
 </div>
                                         
 <div class="form-group">
 <label>Enter Email</label>
-<input class="form-control" type="email" name="email" id="emailid" value="<?php echo htmlentities($result->EmailId);?>"  autocomplete="off" required readonly />
+<input class="form-control" type="email" name="email" id="emailid" value="<?php echo e($result->EmailId);?>"  autocomplete="off" required readonly />
 </div>
 <?php }} ?>
                               
@@ -143,4 +154,3 @@ foreach($results as $result)
     <script src="assets/js/custom.js"></script>
 </body>
 </html>
-<?php } ?>

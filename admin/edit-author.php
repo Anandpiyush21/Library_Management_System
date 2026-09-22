@@ -1,15 +1,8 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
-if(strlen($_SESSION['alogin'])==0)
-    {   
-header('location:index.php');
-}
-else{ 
-
-if(isset($_POST['update']))
-{
+require_once __DIR__ . '/includes/config.php';
+lms_require_admin();
+if (isset($_POST['update'])) {
+    lms_csrf_verify();
 $athrid=intval($_GET['athrid']);
 $author=$_POST['author'];
 $sql="update  tblauthors set AuthorName=:author where id=:athrid";
@@ -17,8 +10,9 @@ $query = $dbh->prepare($sql);
 $query->bindParam(':author',$author,PDO::PARAM_STR);
 $query->bindParam(':athrid',$athrid,PDO::PARAM_STR);
 $query->execute();
-$_SESSION['updatemsg']="Author info updated successfully";
+lms_flash_set('updatemsg', 'Author updated successfully.');
 header('location:manage-authors.php');
+exit();
 
 
 }
@@ -38,7 +32,7 @@ header('location:manage-authors.php');
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 
 </head>
 <body>
@@ -63,6 +57,7 @@ Author Info
 </div>
 <div class="panel-body">
 <form role="form" method="post">
+<?php echo lms_csrf_field(); ?>
 <div class="form-group">
 <label>Author Name</label>
 <?php 
@@ -77,7 +72,7 @@ if($query->rowCount() > 0)
 {
 foreach($results as $result)
 {               ?>   
-<input class="form-control" type="text" name="author" value="<?php echo htmlentities($result->AuthorName);?>" required />
+<input class="form-control" type="text" name="author" value="<?php echo e($result->AuthorName);?>" required />
 <?php }} ?>
 </div>
 
@@ -104,4 +99,3 @@ foreach($results as $result)
     <script src="assets/js/custom.js"></script>
 </body>
 </html>
-<?php } ?>

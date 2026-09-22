@@ -1,40 +1,49 @@
 <?php
-session_start();
-include('includes/config.php');
-error_reporting(0);
+require_once __DIR__ . '/includes/config.php';
+lms_session_start();
+
+$error = '';
+$msg   = '';
+
 if (isset($_POST['signup'])) {
+    lms_csrf_verify();
+    $fname    = trim($_POST['fullanme'] ?? '');
+    $mobileno = trim($_POST['mobileno'] ?? '');
+    $email    = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
 
-
-    //Code for student ID
-    $count_my_page = ("studentid.txt");
-    $hits = file($count_my_page);
-    $hits[0]++;
-    $fp = fopen($count_my_page, "w");
-    fputs($fp, "$hits[0]");
-    fclose($fp);
-    $StudentId = $hits[0];
-    $fname = $_POST['fullanme'];
-    $mobileno = $_POST['mobileno'];
-    $email = $_POST['email'];
-    $password = md5($_POST['password']);
-    $status = 1;
-    $sql = "INSERT INTO  tblstudents(StudentId,FullName,MobileNumber,EmailId,Password,Status) VALUES(:StudentId,:fname,:mobileno,:email,:password,:status)";
-    $query = $dbh->prepare($sql);
-    $query->bindParam(':StudentId', $StudentId, PDO::PARAM_STR);
-    $query->bindParam(':fname', $fname, PDO::PARAM_STR);
-    $query->bindParam(':mobileno', $mobileno, PDO::PARAM_STR);
-    $query->bindParam(':email', $email, PDO::PARAM_STR);
-    $query->bindParam(':password', $password, PDO::PARAM_STR);
-    $query->bindParam(':status', $status, PDO::PARAM_STR);
-    $query->execute();
-    $lastInsertId = $dbh->lastInsertId();
-    if ($lastInsertId) {
-        echo '<script>alert("Your Registration successfull and your student id is  "+"' . $StudentId . '")</script>';
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = 'Please enter a valid e-mail address.';
+    } elseif (!preg_match('/^[0-9]{10}$/', $mobileno)) {
+        $error = 'Mobile number must be exactly 10 digits.';
+    } elseif (strlen($password) < 8) {
+        $error = 'Password must be at least 8 characters long.';
+    } elseif ($password !== ($_POST['confirmpassword'] ?? '')) {
+        $error = 'Password and confirmation do not match.';
     } else {
-        echo "<script>alert('Something went wrong. Please try again');</script>";
+        try {
+            $StudentId = lms_next_student_id(__DIR__ . '/studentid.txt');
+            $sql = "INSERT INTO tblstudents (StudentId, FullName, MobileNumber, EmailId, Password, Status)
+                    VALUES (:StudentId, :fname, :mobileno, :email, :password, 1)";
+            $query = $dbh->prepare($sql);
+            $query->execute([
+                ':StudentId' => $StudentId,
+                ':fname'     => $fname,
+                ':mobileno'  => $mobileno,
+                ':email'     => $email,
+                ':password'  => lms_hash_password($password),
+            ]);
+            $msg = 'Registration successful. Your library card number is ' . $StudentId
+                 . ' — please note it down, you will need it when borrowing books.';
+        } catch (PDOException $e) {
+            // 23000 = integrity constraint: the e-mail is already registered.
+            $error = $e->getCode() === '23000'
+                ? 'That e-mail address is already registered.'
+                : 'Something went wrong. Please try again.';
+            error_log('Signup failed: ' . $e->getMessage());
+        }
     }
 }
-
 ?>
 
 <!DOCTYPE html>
@@ -56,7 +65,7 @@ if (isset($_POST['signup'])) {
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
     <script type="text/javascript">
         function valid() {
             if (document.signup.password.value != document.signup.confirmpassword.value) {
@@ -93,7 +102,7 @@ if (isset($_POST['signup'])) {
         <div class="container">
             <div class="row pad-botm">
                 <div class="col-md-12">
-                    <h4 class="header-line">User Signup</h4>
+                    <h4 class="header-line">Member Signup</h4>
 
                 </div>
 
@@ -103,10 +112,16 @@ if (isset($_POST['signup'])) {
                 <div class="col-md-9 col-md-offset-1">
                     <div class="panel panel-danger">
                         <div class="panel-heading">
-                            SINGUP FORM
+                            Signup Form
                         </div>
                         <div class="panel-body">
                             <form name="signup" method="post" onSubmit="return valid();">
+                                <?php echo lms_csrf_field(); ?>
+                                <?php if ($error !== '') { ?>
+                                    <div class="alert alert-danger"><?php echo e($error); ?></div>
+                                <?php } elseif ($msg !== '') { ?>
+                                    <div class="alert alert-success"><?php echo e($msg); ?></div>
+                                <?php } ?>
                                 <div class="form-group">
                                     <label>Enter Full Name</label>
                                     <input class="form-control" type="text" name="fullanme" autocomplete="off"
@@ -116,7 +131,7 @@ if (isset($_POST['signup'])) {
 
                                 <div class="form-group">
                                     <label>Mobile Number :</label>
-                                    <input class="form-control" type="text" name="mobileno" maxlength="10"
+                                    <input class="form-control" type="text" name="mobileno" maxlength="10" pattern="[0-9]{10}"
                                         autocomplete="off" required />
                                 </div>
 
@@ -129,8 +144,9 @@ if (isset($_POST['signup'])) {
 
                                 <div class="form-group">
                                     <label>Enter Password</label>
-                                    <input class="form-control" type="password" name="password" autocomplete="off"
+                                    <input class="form-control" type="password" name="password" minlength="8" autocomplete="off"
                                         required />
+                                    <span class="help-block">Minimum 8 characters.</span>
                                 </div>
 
                                 <div class="form-group">

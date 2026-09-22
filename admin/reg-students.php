@@ -1,41 +1,21 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
-if(strlen($_SESSION['alogin'])==0)
-    {   
-header('location:index.php');
+require_once __DIR__ . '/includes/config.php';
+lms_require_admin();
+// Blocking or re-activating a member changes state, so it is a CSRF-checked
+// POST rather than a link that any crawler could follow.
+if (isset($_POST['setstatus'])) {
+    lms_csrf_verify();
+    $id     = (int) $_POST['id'];
+    $status = (int) $_POST['status'] === 1 ? 1 : 0;
+
+    $dbh->prepare('UPDATE tblstudents SET Status = :status WHERE id = :id')
+        ->execute([':status' => $status, ':id' => $id]);
+
+    lms_flash_set('msg', $status === 1 ? 'Member re-activated.' : 'Member blocked.');
+    header('location:reg-students.php');
+exit();
+    exit();
 }
-else{ 
-
-// code for block student    
-if(isset($_GET['inid']))
-{
-$id=$_GET['inid'];
-$status=0;
-$sql = "update tblstudents set Status=:status  WHERE id=:id";
-$query = $dbh->prepare($sql);
-$query -> bindParam(':id',$id, PDO::PARAM_STR);
-$query -> bindParam(':status',$status, PDO::PARAM_STR);
-$query -> execute();
-header('location:reg-students.php');
-}
-
-
-
-//code for active students
-if(isset($_GET['id']))
-{
-$id=$_GET['id'];
-$status=1;
-$sql = "update tblstudents set Status=:status  WHERE id=:id";
-$query = $dbh->prepare($sql);
-$query -> bindParam(':id',$id, PDO::PARAM_STR);
-$query -> bindParam(':status',$status, PDO::PARAM_STR);
-$query -> execute();
-header('location:reg-students.php');
-}
-
 
     ?>
 <!DOCTYPE html>
@@ -55,7 +35,7 @@ header('location:reg-students.php');
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 
 </head>
 <body>
@@ -71,6 +51,7 @@ header('location:reg-students.php');
 
 
         </div>
+<div class="row"><?php echo lms_flash_render(); ?></div>
             <div class="row">
                 <div class="col-md-12">
                     <!-- Advanced Tables -->
@@ -94,7 +75,7 @@ header('location:reg-students.php');
                                         </tr>
                                     </thead>
                                     <tbody>
-<?php $sql = "SELECT * from tblstudents";
+<?php $sql = "SELECT * from tblstudents ORDER BY id DESC";
 $query = $dbh -> prepare($sql);
 $query->execute();
 $results=$query->fetchAll(PDO::FETCH_OBJ);
@@ -104,32 +85,34 @@ if($query->rowCount() > 0)
 foreach($results as $result)
 {               ?>                                      
                                         <tr class="odd gradeX">
-                                            <td class="center"><?php echo htmlentities($cnt);?></td>
-                                            <td class="center"><?php echo htmlentities($result->StudentId);?></td>
-                                            <td class="center"><?php echo htmlentities($result->FullName);?></td>
-                                            <td class="center"><?php echo htmlentities($result->EmailId);?></td>
-                                            <td class="center"><?php echo htmlentities($result->MobileNumber);?></td>
-                                             <td class="center"><?php echo htmlentities($result->RegDate);?></td>
+                                            <td class="center"><?php echo e($cnt);?></td>
+                                            <td class="center"><?php echo e($result->StudentId);?></td>
+                                            <td class="center"><?php echo e($result->FullName);?></td>
+                                            <td class="center"><?php echo e($result->EmailId);?></td>
+                                            <td class="center"><?php echo e($result->MobileNumber);?></td>
+                                             <td class="center"><?php echo e($result->RegDate);?></td>
                                              <td class="center" style="color: <?php echo $result->fines > 0 ? 'red' : 'green'; ?>;">
-                                                <?php echo htmlentities($result->fines); ?>
+                                                <?php echo e($result->fines); ?>
                                             </td>
                                             <td class="center"><?php if($result->Status==1)
                                             {
-                                                echo htmlentities("Active");
+                                                echo e("Active");
                                             } else {
 
 
-                                            echo htmlentities("Blocked");
+                                            echo e("Blocked");
 }
                                             ?></td>
                                             <td class="center">
-<?php if($result->Status==1)
- {?>
-<a href="reg-students.php?inid=<?php echo htmlentities($result->id);?>" onclick="return confirm('Are you sure you want to block this student?');"" >  <button class="btn btn-danger"> Inactive</button>
-<?php } else {?>
-
-                                            <a href="reg-students.php?id=<?php echo htmlentities($result->id);?>" onclick="return confirm('Are you sure you want to active this student?');""><button class="btn btn-primary"> Active</button> 
-                                            <?php } ?>
+<form method="post" style="display:inline"
+      onsubmit="return confirm('<?php echo $result->Status == 1 ? 'Block this member?' : 'Re-activate this member?'; ?>');">
+    <?php echo lms_csrf_field(); ?>
+    <input type="hidden" name="id" value="<?php echo e($result->id); ?>" />
+    <input type="hidden" name="status" value="<?php echo $result->Status == 1 ? 0 : 1; ?>" />
+    <button type="submit" name="setstatus" class="btn <?php echo $result->Status == 1 ? 'btn-danger' : 'btn-primary'; ?>">
+        <?php echo $result->Status == 1 ? 'Block' : 'Activate'; ?>
+    </button>
+</form>
                                           
                                             </td>
                                         </tr>
@@ -164,4 +147,3 @@ foreach($results as $result)
     <script src="assets/js/custom.js"></script>
 </body>
 </html>
-<?php } ?>

@@ -1,23 +1,30 @@
 <?php
-session_start();
-include('includes/config.php');
-if(isset($_POST['login']))
-{
-$username=$_POST['username'];
-$password=md5($_POST['password']);
-$sql ="SELECT UserName,Password FROM admin WHERE UserName=:username and Password=:password";
-$query= $dbh -> prepare($sql);
-$query-> bindParam(':username', $username, PDO::PARAM_STR);
-$query-> bindParam(':password', $password, PDO::PARAM_STR);
-$query-> execute();
-$results=$query->fetchAll(PDO::FETCH_OBJ);
-if($query->rowCount() > 0)
-{
-$_SESSION['alogin']=$_POST['username'];
-echo "<script type='text/javascript'> document.location ='dashboard.php'; </script>";
-} else{
-echo "<script>alert('Invalid Details');</script>";
-}
+require_once __DIR__ . '/includes/config.php';
+lms_session_start();
+
+$error = '';
+
+if (isset($_POST['login'])) {
+    lms_csrf_verify();
+    $username = trim($_POST['username'] ?? '');
+    $password = $_POST['password'] ?? '';
+
+    $sql = "SELECT UserName, Password FROM admin WHERE UserName = :username";
+    $query = $dbh->prepare($sql);
+    $query->bindParam(':username', $username, PDO::PARAM_STR);
+    $query->execute();
+    $admin = $query->fetch();
+
+    if ($admin && lms_verify_password($password, $admin->Password)) {
+        if (lms_password_needs_rehash($admin->Password)) {
+            lms_upgrade_password($dbh, 'admin', 'UserName', $admin->UserName, $password);
+        }
+        session_regenerate_id(true);
+        $_SESSION['alogin'] = $admin->UserName;
+        header('location:dashboard.php');
+        exit();
+    }
+    $error = 'Invalid username or password.';
 }
 ?>
 <!DOCTYPE html>
@@ -27,7 +34,7 @@ echo "<script>alert('Invalid Details');</script>";
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="" />
     <meta name="author" content="" />
-    <title>IIIT Raichur</title>
+    <title>IIIT Raichur | Librarian Login</title>
     <!-- BOOTSTRAP CORE STYLE  -->
     <link href="assets/css/bootstrap.css" rel="stylesheet" />
     <!-- FONT AWESOME STYLE  -->
@@ -35,7 +42,7 @@ echo "<script>alert('Invalid Details');</script>";
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 
 </head>
 <body>
@@ -46,7 +53,7 @@ echo "<script>alert('Invalid Details');</script>";
 <div class="container">
 <div class="row pad-botm">
 <div class="col-md-12">
-<h4 class="header-line">ADMIN LOGIN FORM</h4>
+<h4 class="header-line">Librarian Login</h4>
 </div>
 </div>
              
@@ -59,6 +66,10 @@ echo "<script>alert('Invalid Details');</script>";
 </div>
 <div class="panel-body">
 <form role="form" method="post">
+<?php echo lms_csrf_field(); ?>
+<?php if ($error !== '') { ?>
+<div class="alert alert-danger"><?php echo e($error); ?></div>
+<?php } ?>
 
 <div class="form-group">
 <label>Enter Username</label>

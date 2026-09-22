@@ -1,20 +1,27 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
+require_once __DIR__ . '/includes/config.php';
+lms_require_admin();
+// Destructive actions are POST-only and CSRF-checked: a plain <a href=?del=>
+// could be triggered by any page the librarian happens to open, and is also
+// followed by link pre-fetchers.
+if (isset($_POST['delete'])) {
+    lms_csrf_verify();
+    $id = (int) $_POST['bookid'];
 
-if(strlen($_SESSION['alogin']) == 0) {   
-    header('location:index.php');
-} else { 
-    if(isset($_GET['del'])) {
-        $id = $_GET['del'];
-        $sql = "DELETE FROM tblbooks WHERE id=:id";
-        $query = $dbh->prepare($sql);
-        $query->bindParam(':id', $id, PDO::PARAM_STR);
-        $query->execute();
-        $_SESSION['delmsg'] = "Book deleted successfully";
-        header('location:manage-books.php');
+    $onLoan = $dbh->prepare(
+        'SELECT COUNT(*) FROM tblissuedbookdetails WHERE BookId = :id AND RetrunStatus = 0'
+    );
+    $onLoan->execute([':id' => $id]);
+
+    if ($onLoan->fetchColumn() > 0) {
+        $_SESSION['error'] = 'This title cannot be removed while copies are still on loan.';
+    } else {
+        $dbh->prepare('DELETE FROM tblbooks WHERE id = :id')->execute([':id' => $id]);
+        $_SESSION['delmsg'] = 'Book deleted successfully.';
     }
+    header('location:manage-books.php');
+    exit();
+}
 ?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -28,7 +35,7 @@ if(strlen($_SESSION['alogin']) == 0) {
     <link href="assets/css/font-awesome.css" rel="stylesheet" />
     <link href="assets/js/dataTables/dataTables.bootstrap.css" rel="stylesheet" />
     <link href="assets/css/style.css" rel="stylesheet" />
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 </head>
 <body>
     <?php include('includes/header.php'); ?>
@@ -39,10 +46,7 @@ if(strlen($_SESSION['alogin']) == 0) {
                     <h4 class="header-line">Manage Books</h4>
                 </div>
             </div>
-            <div class="row">
-                <!-- Display success/error messages -->
-                <!-- ... -->
-            </div>
+            <div class="row"><?php echo lms_flash_render(); ?></div>
             <div class="row">
                 <div class="col-md-12">
                     <div class="panel panel-default">
@@ -58,13 +62,13 @@ if(strlen($_SESSION['alogin']) == 0) {
                                             <th>Author</th>
                                             <th>ISBN</th>
                                             <th>Price</th>
-                                            <th>Count</th>
+                                            <th>Copies on shelf</th>
                                             <th>Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <?php 
-                                        $sql = "SELECT tblbooks.BookName, tblcategory.CategoryName, tblbooks.Author, tblbooks.ISBNNumber, tblbooks.BookPrice,tblbooks.Count, tblbooks.id as bookid FROM tblbooks JOIN tblcategory ON tblcategory.id=tblbooks.CatId";
+                                        $sql = "SELECT tblbooks.BookName, tblcategory.CategoryName, tblbooks.Author, tblbooks.ISBNNumber, tblbooks.BookPrice,tblbooks.Count, tblbooks.id as bookid FROM tblbooks LEFT JOIN tblcategory ON tblcategory.id=tblbooks.CatId ORDER BY tblbooks.BookName";
                                         $query = $dbh->prepare($sql);
                                         $query->execute();
                                         $results = $query->fetchAll(PDO::FETCH_OBJ);
@@ -72,24 +76,25 @@ if(strlen($_SESSION['alogin']) == 0) {
                                         if($query->rowCount() > 0) {
                                             foreach($results as $result) { ?>                                      
                                                 <tr class="odd gradeX">
-                                                    <td class="center"><?php echo htmlentities($cnt);?></td>
-                                                    <td class="center"><?php echo htmlentities($result->BookName);?></td>
-                                                    <td class="center"><?php echo htmlentities($result->CategoryName);?></td>
-                                                    <td class="center"><?php echo htmlentities($result->Author);?></td>
-                                                    <td class="center"><?php echo htmlentities($result->ISBNNumber);?></td>
-                                                    <td class="center"><?php echo htmlentities($result->BookPrice);?></td>
-                                                    <td class="center"><?php echo htmlentities($result->Count);?></td>
+                                                    <td class="center"><?php echo e($cnt);?></td>
+                                                    <td class="center"><?php echo e($result->BookName);?></td>
+                                                    <td class="center"><?php echo e($result->CategoryName ?? 'Uncategorised');?></td>
+                                                    <td class="center"><?php echo e($result->Author);?></td>
+                                                    <td class="center"><?php echo e($result->ISBNNumber);?></td>
+                                                    <td class="center"><?php echo e($result->BookPrice);?></td>
+                                                    <td class="center"><?php echo e($result->Count);?></td>
                                                     <td class="center">
-                                                        <!-- <a href="edit-book.php?bookid=<?php echo htmlentities($result->bookid);?>">
-                                                            <button class="btn btn-primary">
-                                                                <i class="fa fa-edit"></i> Edit
-                                                            </button>
-                                                        </a> -->
-                                                        <a href="manage-books.php?del=<?php echo htmlentities($result->bookid);?>" onclick="return confirm('Are you sure you want to delete?');">
-                                                            <button class="btn btn-danger">
-                                                                <i class="fa fa-pencil"></i> Delete
-                                                            </button>
+                                                        <a href="edit-book.php?bookid=<?php echo e($result->bookid); ?>" class="btn btn-primary">
+                                                            <i class="fa fa-edit"></i> Edit
                                                         </a>
+                                                        <form method="post" style="display:inline"
+                                                              onsubmit="return confirm('Delete this book from the catalogue?');">
+                                                            <?php echo lms_csrf_field(); ?>
+                                                            <input type="hidden" name="bookid" value="<?php echo e($result->bookid); ?>" />
+                                                            <button type="submit" name="delete" class="btn btn-danger">
+                                                                <i class="fa fa-trash"></i> Delete
+                                                            </button>
+                                                        </form>
                                                     </td>
                                                 </tr>
                                                 <?php $cnt = $cnt + 1;
@@ -111,4 +116,3 @@ if(strlen($_SESSION['alogin']) == 0) {
     <script src="assets/js/custom.js"></script>
 </body>
 </html>
-<?php } ?>

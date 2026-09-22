@@ -1,37 +1,33 @@
 <?php
-session_start();
-include('includes/config.php');
-error_reporting(0);
-if(strlen($_SESSION['login'])==0)
-    {   
-header('location:index.php');
-}
-else{ 
-if(isset($_POST['change']))
-  {
-$password=md5($_POST['password']);
-$newpassword=md5($_POST['newpassword']);
-$email=$_SESSION['login'];
-  $sql ="SELECT Password FROM tblstudents WHERE EmailId=:email and Password=:password";
-$query= $dbh -> prepare($sql);
-$query-> bindParam(':email', $email, PDO::PARAM_STR);
-$query-> bindParam(':password', $password, PDO::PARAM_STR);
-$query-> execute();
-$results = $query -> fetchAll(PDO::FETCH_OBJ);
-if($query -> rowCount() > 0)
-{
-$con="update tblstudents set Password=:newpassword where EmailId=:email";
-$chngpwd1 = $dbh->prepare($con);
-$chngpwd1-> bindParam(':email', $email, PDO::PARAM_STR);
-$chngpwd1-> bindParam(':newpassword', $newpassword, PDO::PARAM_STR);
-$chngpwd1->execute();
-$msg="Your Password succesfully changed";
-}
-else {
-$error="Your current password is wrong";  
-}
-}
+require_once __DIR__ . '/includes/config.php';
+$studentId = lms_require_student();
 
+$error = '';
+$msg   = '';
+
+if (isset($_POST['change'])) {
+    lms_csrf_verify();
+    $current = $_POST['password'] ?? '';
+    $new     = $_POST['newpassword'] ?? '';
+    $confirm = $_POST['confirmpassword'] ?? '';
+    $email   = $_SESSION['login'];
+
+    $query = $dbh->prepare("SELECT Password FROM tblstudents WHERE EmailId = :email");
+    $query->execute([':email' => $email]);
+    $row = $query->fetch();
+
+    if (!$row || !lms_verify_password($current, $row->Password)) {
+        $error = 'Your current password is wrong.';
+    } elseif (strlen($new) < 8) {
+        $error = 'The new password must be at least 8 characters long.';
+    } elseif ($new !== $confirm) {
+        $error = 'New password and confirmation do not match.';
+    } else {
+        $update = $dbh->prepare("UPDATE tblstudents SET Password = :pwd WHERE EmailId = :email");
+        $update->execute([':pwd' => lms_hash_password($new), ':email' => $email]);
+        $msg = 'Your password has been changed.';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -40,7 +36,7 @@ $error="Your current password is wrong";
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="" />
     <meta name="author" content="" />
-    <title>IIIT Raichur | </title>
+    <title>IIIT Raichur | Change Password</title>
     <!-- BOOTSTRAP CORE STYLE  -->
     <link href="assets/css/bootstrap.css" rel="stylesheet" />
     <!-- FONT AWESOME STYLE  -->
@@ -48,7 +44,7 @@ $error="Your current password is wrong";
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
   <style>
     .errorWrap {
     padding: 10px;
@@ -92,8 +88,8 @@ return true;
 <h4 class="header-line">User Change Password</h4>
 </div>
 </div>
- <?php if($error){?><div class="errorWrap"><strong>ERROR</strong>:<?php echo htmlentities($error); ?> </div><?php } 
-        else if($msg){?><div class="succWrap"><strong>SUCCESS</strong>:<?php echo htmlentities($msg); ?> </div><?php }?>            
+ <?php if($error !== ''){?><div class="errorWrap"><strong>ERROR</strong>:<?php echo e($error); ?> </div><?php } 
+        else if($msg !== ''){?><div class="succWrap"><strong>SUCCESS</strong>:<?php echo e($msg); ?> </div><?php }?>            
 <!--LOGIN PANEL START-->           
 <div class="row">
 <div class="col-md-6 col-sm-6 col-xs-12 col-md-offset-3" >
@@ -103,6 +99,7 @@ Change Password
 </div>
 <div class="panel-body">
 <form role="form" method="post" onSubmit="return valid();" name="chngpwd">
+<?php echo lms_csrf_field(); ?>
 
 <div class="form-group">
 <label>Current Password</label>
@@ -111,7 +108,7 @@ Change Password
 
 <div class="form-group">
 <label>Enter Password</label>
-<input class="form-control" type="password" name="newpassword" autocomplete="off" required  />
+<input class="form-control" type="password" name="newpassword" minlength="8" autocomplete="off" required  />
 </div>
 
 <div class="form-group">
@@ -119,7 +116,7 @@ Change Password
 <input class="form-control"  type="password" name="confirmpassword" autocomplete="off" required  />
 </div>
 
- <button type="submit" name="change" class="btn btn-info">Chnage </button> 
+ <button type="submit" name="change" class="btn btn-info">Change </button> 
 </form>
  </div>
 </div>
@@ -140,4 +137,3 @@ Change Password
     <script src="assets/js/custom.js"></script>
 </body>
 </html>
-<?php } ?>

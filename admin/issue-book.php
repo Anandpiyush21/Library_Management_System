@@ -1,60 +1,30 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
-if(strlen($_SESSION['alogin'])==0)
-    {   
-header('location:index.php');
-}
-else{ 
+require_once __DIR__ . '/includes/config.php';
+lms_require_admin();
 
-if(isset($_POST['issue']))
-{
+$error = '';
+$msg   = '';
 
+if (isset($_POST['issue'])) {
+    lms_csrf_verify();
+    $studentid = strtoupper(trim($_POST['studentid'] ?? ''));
+    $bookid    = (int) ($_POST['bookdetails'] ?? 0);
 
+    // Every circulation rule (member blocked, no copies left, loan limit
+    // reached, duplicate title) is checked in one place before we touch the
+    // ledger; see includes/library.php.
+    $blocker = lms_issue_blocker($dbh, $studentid, $bookid);
 
-
-
-    $studentid = strtoupper($_POST['studentid']);
-    $bookid = $_POST['bookdetails'];
-
-    // Fetch the current book count
-    $sql_fetch_count = "SELECT Count FROM tblbooks WHERE id = :bookid";
-    $query_fetch_count = $dbh->prepare($sql_fetch_count);
-    $query_fetch_count->bindParam(':bookid', $bookid, PDO::PARAM_STR);
-    $query_fetch_count->execute();
-    $result_count = $query_fetch_count->fetch(PDO::FETCH_ASSOC);
-
-    // Decrease the count by one
-    if ($result_count && $result_count['Count'] > 0) {
-        $new_count = $result_count['Count'] - 1;
-
-        // Update the book count in tblbooks
-        $sql_update_count = "UPDATE tblbooks SET Count = :new_count WHERE id = :bookid";
-        $query_update_count = $dbh->prepare($sql_update_count);
-        $query_update_count->bindParam(':new_count', $new_count, PDO::PARAM_INT);
-        $query_update_count->bindParam(':bookid', $bookid, PDO::PARAM_STR);
-        $query_update_count->execute();
+    if ($blocker !== null) {
+        $error = $blocker;
+    } elseif (lms_issue_book($dbh, $studentid, $bookid)) {
+        $due = lms_due_date('now')->format('d M Y');
+        $_SESSION['msg'] = 'Book issued to ' . $studentid . '. Due back on ' . $due . '.';
+        header('location:manage-issued-books.php');
+        exit();
+    } else {
+        $error = 'The last copy was issued a moment ago. Please refresh and try again.';
     }
-$studentid=strtoupper($_POST['studentid']);
-$bookid=$_POST['bookdetails'];
-$sql="INSERT INTO  tblissuedbookdetails(StudentID,BookId) VALUES(:studentid,:bookid)";
-$query = $dbh->prepare($sql);
-$query->bindParam(':studentid',$studentid,PDO::PARAM_STR);
-$query->bindParam(':bookid',$bookid,PDO::PARAM_STR);
-$query->execute();
-$lastInsertId = $dbh->lastInsertId();
-if($lastInsertId)
-{
-$_SESSION['msg']="Book issued successfully";
-header('location:manage-issued-books.php');
-}
-else 
-{
-$_SESSION['error']="Something went wrong. Please try again";
-header('location:manage-issued-books.php');
-}
-
 }
 ?>
 <!DOCTYPE html>
@@ -72,7 +42,7 @@ header('location:manage-issued-books.php');
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 <script>
 // function for get student name
 function getstudent() {
@@ -118,7 +88,6 @@ error:function (){}
       <!------MENU SECTION START-->
 <?php include('includes/header.php');?>
 <!-- MENU SECTION END-->
-    <div class="content-wra
     <div class="content-wrapper">
          <div class="container">
         <div class="row pad-botm">
@@ -128,14 +97,19 @@ error:function (){}
                             </div>
 
 </div>
+<div class="row"><?php echo lms_flash_render(); ?></div>
 <div class="row">
-<div class="col-md-10 col-sm-6 col-xs-12 col-md-offset-1"">
+<div class="col-md-10 col-sm-6 col-xs-12 col-md-offset-1">
 <div class="panel panel-info">
 <div class="panel-heading">
 Issue a New Book
 </div>
 <div class="panel-body">
 <form role="form" method="post">
+<?php echo lms_csrf_field(); ?>
+<?php if ($error !== '') { ?>
+<div class="alert alert-danger"><?php echo e($error); ?></div>
+<?php } ?>
 
 <div class="form-group">
 <label>Student ID<span style="color:red;">*</span></label>
@@ -152,7 +126,7 @@ Issue a New Book
 
 <div class="form-group">
 <label>ISBN Number or Book Title<span style="color:red;">*</span></label>
-<input class="form-control" type="text" name="booikid" id="bookid" onBlur="getbook()"  required="required" />
+<input class="form-control" type="text" name="bookisbn" id="bookid" onBlur="getbook()"  required="required" />
 </div>
 
  <div class="form-group">
@@ -185,4 +159,3 @@ Issue a New Book
 
 </body>
 </html>
-<?php } ?>

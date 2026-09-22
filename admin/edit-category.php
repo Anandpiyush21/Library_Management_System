@@ -1,15 +1,8 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
-if(strlen($_SESSION['alogin'])==0)
-    {   
-header('location:index.php');
-}
-else{ 
-
-if(isset($_POST['update']))
-{
+require_once __DIR__ . '/includes/config.php';
+lms_require_admin();
+if (isset($_POST['update'])) {
+    lms_csrf_verify();
 $category=$_POST['category'];
 $status=$_POST['status'];
 $catid=intval($_GET['catid']);
@@ -19,8 +12,9 @@ $query->bindParam(':category',$category,PDO::PARAM_STR);
 $query->bindParam(':status',$status,PDO::PARAM_STR);
 $query->bindParam(':catid',$catid,PDO::PARAM_STR);
 $query->execute();
-$_SESSION['updatemsg']="Brand updated successfully";
+lms_flash_set('updatemsg', 'Category updated successfully.');
 header('location:manage-categories.php');
+exit();
 
 
 }
@@ -40,7 +34,7 @@ header('location:manage-categories.php');
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 
 </head>
 <body>
@@ -66,6 +60,7 @@ Category Info
  
 <div class="panel-body">
 <form role="form" method="post">
+<?php echo lms_csrf_field(); ?>
 <?php 
 $catid=intval($_GET['catid']);
 $sql="SELECT * from tblcategory where id=:catid";
@@ -80,7 +75,7 @@ foreach($results as $result)
   ?> 
 <div class="form-group">
 <label>Category Name</label>
-<input class="form-control" type="text" name="category" value="<?php echo htmlentities($result->CategoryName);?>" required />
+<input class="form-control" type="text" name="category" value="<?php echo e($result->CategoryName);?>" required />
 </div>
 <div class="form-group">
 <label>Status</label>
@@ -132,4 +127,3 @@ foreach($results as $result)
     <script src="assets/js/custom.js"></script>
 </body>
 </html>
-<?php } ?>

@@ -1,22 +1,21 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
-if(strlen($_SESSION['alogin'])==0)
-    {   
-header('location:index.php');
-}
-else{
-if(isset($_GET['del']))
-{
-$id=$_GET['del'];
-$sql = "delete from tblauthors  WHERE id=:id";
-$query = $dbh->prepare($sql);
-$query -> bindParam(':id',$id, PDO::PARAM_STR);
-$query -> execute();
-$_SESSION['delmsg']="Author deleted";
-header('location:manage-authors.php');
+require_once __DIR__ . '/includes/config.php';
+lms_require_admin();
+if (isset($_POST['delete'])) {
+    lms_csrf_verify();
+    $id = (int) $_POST['id'];
 
+    $inUse = $dbh->prepare("SELECT COUNT(*) FROM tblbooks WHERE AuthorId = :id");
+    $inUse->execute([':id' => $id]);
+
+    if ($inUse->fetchColumn() > 0) {
+        lms_flash_set('error', 'This author is still referenced by one or more books.');
+    } else {
+        $dbh->prepare("DELETE FROM tblauthors WHERE id = :id")->execute([':id' => $id]);
+        lms_flash_set('delmsg', 'Author deleted successfully.');
+    }
+    header('location:manage-authors.php');
+    exit();
 }
 
 
@@ -38,7 +37,7 @@ header('location:manage-authors.php');
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 
 </head>
 <body>
@@ -52,48 +51,7 @@ header('location:manage-authors.php');
                 <h4 class="header-line">Manage Authors</h4>
     </div>
      <div class="row">
-    <?php if($_SESSION['error']!="")
-    {?>
-<div class="col-md-6">
-<div class="alert alert-danger" >
- <strong>Error :</strong> 
- <?php echo htmlentities($_SESSION['error']);?>
-<?php echo htmlentities($_SESSION['error']="");?>
-</div>
-</div>
-<?php } ?>
-<?php if($_SESSION['msg']!="")
-{?>
-<div class="col-md-6">
-<div class="alert alert-success" >
- <strong>Success :</strong> 
- <?php echo htmlentities($_SESSION['msg']);?>
-<?php echo htmlentities($_SESSION['msg']="");?>
-</div>
-</div>
-<?php } ?>
-<?php if($_SESSION['updatemsg']!="")
-{?>
-<div class="col-md-6">
-<div class="alert alert-success" >
- <strong>Success :</strong> 
- <?php echo htmlentities($_SESSION['updatemsg']);?>
-<?php echo htmlentities($_SESSION['updatemsg']="");?>
-</div>
-</div>
-<?php } ?>
-
-
-   <?php if($_SESSION['delmsg']!="")
-    {?>
-<div class="col-md-6">
-<div class="alert alert-success" >
- <strong>Success :</strong> 
- <?php echo htmlentities($_SESSION['delmsg']);?>
-<?php echo htmlentities($_SESSION['delmsg']="");?>
-</div>
-</div>
-<?php } ?>
+    <?php echo lms_flash_render(); ?>
 
 </div>
 
@@ -130,15 +88,18 @@ if($query->rowCount() > 0)
 foreach($results as $result)
 {               ?>                                      
                                         <tr class="odd gradeX">
-                                            <td class="center"><?php echo htmlentities($cnt);?></td>
-                                            <td class="center"><?php echo htmlentities($result->AuthorName);?></td>
-                                            <td class="center"><?php echo htmlentities($result->creationDate);?></td>
-                                            <td class="center"><?php echo htmlentities($result->UpdationDate);?></td>
+                                            <td class="center"><?php echo e($cnt);?></td>
+                                            <td class="center"><?php echo e($result->AuthorName);?></td>
+                                            <td class="center"><?php echo e($result->creationDate);?></td>
+                                            <td class="center"><?php echo e($result->UpdationDate);?></td>
                                             <td class="center">
 
-                                            <a href="edit-author.php?athrid=<?php echo htmlentities($result->id);?>"><button class="btn btn-primary"><i class="fa fa-edit "></i> Edit</button> 
-                                          <a href="manage-authors.php?del=<?php echo htmlentities($result->id);?>" onclick="return confirm('Are you sure you want to delete?');"" >  <button class="btn btn-danger"><i class="fa fa-pencil"></i> Delete</button>
-                                            </td>
+                                            <a href="edit-author.php?athrid=<?php echo e($result->id);?>"><button class="btn btn-primary"><i class="fa fa-edit "></i> Edit</button> 
+                                          <form method="post" style="display:inline" onsubmit="return confirm('Are you sure you want to delete?');">
+<?php echo lms_csrf_field(); ?>
+<input type="hidden" name="id" value="<?php echo e($result->id); ?>" />
+<button type="submit" name="delete" class="btn btn-danger"><i class="fa fa-trash"></i> Delete</button>
+</form></td>
                                         </tr>
  <?php $cnt=$cnt+1;}} ?>                                      
                                     </tbody>
@@ -171,4 +132,3 @@ foreach($results as $result)
     <script src="assets/js/custom.js"></script>
 </body>
 </html>
-<?php } ?>

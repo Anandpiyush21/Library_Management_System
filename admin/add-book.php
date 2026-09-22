@@ -1,37 +1,57 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
+require_once __DIR__ . '/includes/config.php';
+lms_require_admin();
 
-if(strlen($_SESSION['alogin']) == 0) {   
-    header('location:index.php');
-} else { 
-    if(isset($_POST['add'])) {
-        $bookname = $_POST['bookname'];
-        $category = $_POST['category'];
-        $author = $_POST['author'];
-        $isbn = $_POST['isbn'];
-        $price = $_POST['price'];
-        $count = $_POST['count'];
-        
-        $sql = "INSERT INTO tblbooks(BookName, CatId, Author, ISBNNumber, BookPrice, Count) VALUES(:bookname, :category, :author, :isbn, :price, :count)";
-    $query = $dbh->prepare($sql);
-    $query->bindParam(':bookname', $bookname, PDO::PARAM_STR);
-    $query->bindParam(':category', $category, PDO::PARAM_STR);
-    $query->bindParam(':author', $author, PDO::PARAM_STR);
-    $query->bindParam(':isbn', $isbn, PDO::PARAM_STR);
-    $query->bindParam(':price', $price, PDO::PARAM_STR);
-    $query->bindParam(':count', $count, PDO::PARAM_INT); // Bind count parameter
-    $query->execute();
-        $lastInsertId = $dbh->lastInsertId();
-        if($lastInsertId) {
-            $_SESSION['msg'] = "Book Listed successfully";
-            header('location:manage-books.php') ;
-        } else {
-            $_SESSION['error'] = "Something went wrong. Please try again";
-            header('location:manage-books.php'); 
+$error = '';
+
+if (isset($_POST['add'])) {
+    lms_csrf_verify();
+    $bookname = trim($_POST['bookname'] ?? '');
+    $category = (int) ($_POST['category'] ?? 0);
+    $author   = trim($_POST['author'] ?? '');
+    $isbn     = trim($_POST['isbn'] ?? '');
+    $price    = (float) ($_POST['price'] ?? 0);
+    $count    = max(0, (int) ($_POST['count'] ?? 0));
+
+    if ($bookname === '' || $author === '') {
+        $error = 'Title and author are required.';
+    } elseif (!preg_match('/^[0-9Xx-]{10,17}$/', $isbn)) {
+        $error = 'Please enter a valid 10- or 13-digit ISBN.';
+    } else {
+        try {
+            // Keep the free-text author in step with the normalised author
+            // table, so the Edit Book join always has a row to work with.
+            $lookup = $dbh->prepare('SELECT id FROM tblauthors WHERE AuthorName = :name');
+            $lookup->execute([':name' => $author]);
+            $authorId = $lookup->fetchColumn();
+            if (!$authorId) {
+                $dbh->prepare('INSERT INTO tblauthors (AuthorName) VALUES (:name)')
+                    ->execute([':name' => $author]);
+                $authorId = $dbh->lastInsertId();
+            }
+
+            $sql = "INSERT INTO tblbooks (BookName, CatId, AuthorId, Author, ISBNNumber, BookPrice, Count)
+                    VALUES (:bookname, :category, :authorid, :author, :isbn, :price, :count)";
+            $dbh->prepare($sql)->execute([
+                ':bookname' => $bookname,
+                ':category' => $category,
+                ':authorid' => $authorId,
+                ':author'   => $author,
+                ':isbn'     => $isbn,
+                ':price'    => $price,
+                ':count'    => $count,
+            ]);
+            lms_flash_set('msg', 'Book added to the catalogue.');
+            header('location:manage-books.php');
+            exit();
+        } catch (PDOException $e) {
+            $error = $e->getCode() === '23000'
+                ? 'A book with that ISBN is already in the catalogue.'
+                : 'Something went wrong. Please try again.';
+            error_log('Add book failed: ' . $e->getMessage());
         }
     }
+}
 ?>
 
 <!DOCTYPE html>
@@ -49,7 +69,7 @@ if(strlen($_SESSION['alogin']) == 0) {
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 </head>
 <body>
     <?php include('includes/header.php'); ?>
@@ -66,6 +86,10 @@ if(strlen($_SESSION['alogin']) == 0) {
                         <div class="panel-heading">Book Info</div>
                         <div class="panel-body">
                             <form role="form" method="post">
+                                <?php echo lms_csrf_field(); ?>
+                                <?php if ($error !== '') { ?>
+                                    <div class="alert alert-danger"><?php echo e($error); ?></div>
+                                <?php } ?>
                                 <div class="form-group">
                                     <label>Book Name<span style="color:red;">*</span></label>
                                     <input class="form-control" type="text" name="bookname" autocomplete="off" required />
@@ -85,7 +109,7 @@ if(strlen($_SESSION['alogin']) == 0) {
                                             if($query->rowCount() > 0) {
                                                 foreach($results as $result) {
                                         ?>
-                                        <option value="<?php echo htmlentities($result->id); ?>"><?php echo htmlentities($result->CategoryName); ?></option>
+                                        <option value="<?php echo e($result->id); ?>"><?php echo e($result->CategoryName); ?></option>
                                         <?php }} ?> 
                                     </select>
                                 </div>
@@ -121,4 +145,3 @@ if(strlen($_SESSION['alogin']) == 0) {
     <script src="assets/js/custom.js"></script>
 </body>
 </html>
-<?php } ?>

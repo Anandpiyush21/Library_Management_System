@@ -1,18 +1,21 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
+require_once __DIR__ . '/includes/config.php';
+$studentId = lms_require_student();
 
-if (strlen($_SESSION['login']) == 0) {
-    header('location:index.php');
-    exit();
-} else {
-    $search = isset($_POST['search']) ? $_POST['search'] : '';
-    $sql = "SELECT * FROM tblbooks WHERE BookName LIKE :search";
-    $query = $dbh->prepare($sql);
-    $query->bindValue(':search', '%' . $search . '%', PDO::PARAM_STR);
-    $query->execute();
-    $books = $query->fetchAll(PDO::FETCH_ASSOC);
+$search = trim($_GET['search'] ?? '');
+
+// Catalogue search across title, author and ISBN, with the live copy count
+// so members can see what is actually on the shelf before walking over.
+$sql = "SELECT b.id, b.BookName, b.Author, b.ISBNNumber, b.BookPrice, b.Count,
+               COALESCE(c.CategoryName, 'Uncategorised') AS CategoryName
+        FROM tblbooks b
+        LEFT JOIN tblcategory c ON c.id = b.CatId
+        WHERE b.BookName LIKE :q1 OR b.Author LIKE :q2 OR b.ISBNNumber LIKE :q3
+        ORDER BY b.BookName";
+$query = $dbh->prepare($sql);
+$like = '%' . $search . '%';
+$query->execute([':q1' => $like, ':q2' => $like, ':q3' => $like]);
+$books = $query->fetchAll();
 ?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -22,7 +25,7 @@ if (strlen($_SESSION['login']) == 0) {
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="" />
     <meta name="author" content="" />
-    <title>Available Books</title>
+    <title>IIIT Raichur | Catalogue</title>
     <!-- Bootstrap CSS -->
     <link href="assets/css/bootstrap.css" rel="stylesheet" />
     <!-- Font Awesome CSS -->
@@ -30,7 +33,7 @@ if (strlen($_SESSION['login']) == 0) {
     <!-- Custom CSS -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- Google Font -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 </head>
 
 <body>
@@ -43,9 +46,9 @@ if (strlen($_SESSION['login']) == 0) {
             <!-- Search Bar -->
             <div class="row">
                 <div class="col-md-12">
-                    <form method="post">
+                    <form method="get">
                         <div class="input-group">
-                            <input type="text" class="form-control" placeholder="Search Books by Name" name="search" value="<?php echo $search; ?>">
+                            <input type="text" class="form-control" placeholder="Search by title, author or ISBN" name="search" value="<?php echo e($search); ?>">
                             <div class="input-group-btn">
                                 <button class="btn btn-default" type="submit">
                                     <i class="glyphicon glyphicon-search"></i>
@@ -78,20 +81,29 @@ if (strlen($_SESSION['login']) == 0) {
                                             <th>Author</th>
                                             <th>ISBN Number</th>
                                             <th>Price</th>
-                                            <th>Count</th>
+                                            <th>Availability</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach ($books as $book) { ?>
+                                        <?php foreach ($books as $book) { $available = (int) $book->Count > 0; ?>
                                             <tr>
-                                                <td><?php echo $book['id']; ?></td>
-                                                <td><?php echo $book['BookName']; ?></td>
-                                                <td><?php echo $book['CatId']; ?></td>
-                                                <td><?php echo $book['Author']; ?></td>
-                                                <td><?php echo $book['ISBNNumber']; ?></td>
-                                                <td><?php echo $book['BookPrice']; ?></td>
-                                                <td><?php echo $book['Count']; ?></td>
+                                                <td><?php echo e($book->id); ?></td>
+                                                <td><?php echo e($book->BookName); ?></td>
+                                                <td><?php echo e($book->CategoryName); ?></td>
+                                                <td><?php echo e($book->Author); ?></td>
+                                                <td><?php echo e($book->ISBNNumber); ?></td>
+                                                <td><?php echo e(number_format((float) $book->BookPrice, 2)); ?></td>
+                                                <td>
+                                                    <?php if ($available) { ?>
+                                                        <span style="color:#3c763d"><?php echo e($book->Count); ?> available</span>
+                                                    <?php } else { ?>
+                                                        <span style="color:red">All copies on loan</span>
+                                                    <?php } ?>
+                                                </td>
                                             </tr>
+                                        <?php } ?>
+                                        <?php if (!$books) { ?>
+                                            <tr><td colspan="7" class="text-center">No book matches &ldquo;<?php echo e($search); ?>&rdquo;.</td></tr>
                                         <?php } ?>
                                     </tbody>
                                 </table>
@@ -116,6 +128,3 @@ if (strlen($_SESSION['login']) == 0) {
 </body>
 
 </html>
-<?php
-}
-?>

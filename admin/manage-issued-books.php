@@ -1,15 +1,6 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
-if(strlen($_SESSION['alogin'])==0)
-    {   
-header('location:index.php');
-}
-else{ 
-
-
-
+require_once __DIR__ . '/includes/config.php';
+lms_require_admin();
     ?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -28,7 +19,7 @@ else{
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 
 </head>
 <body>
@@ -42,40 +33,7 @@ else{
                 <h4 class="header-line">Manage Issued Books</h4>
     </div>
      <div class="row">
-    <?php if($_SESSION['error']!="")
-    {?>
-<div class="col-md-6">
-<div class="alert alert-danger" >
- <strong>Error :</strong> 
- <?php echo htmlentities($_SESSION['error']);?>
-<?php echo htmlentities($_SESSION['error']="");?>
-</div>
-</div>
-<?php } ?>
-<?php if($_SESSION['msg']!="")
-{?>
-<div class="col-md-6">
-<div class="alert alert-success" >
- <strong>Success :</strong> 
- <?php echo htmlentities($_SESSION['msg']);?>
-<?php echo htmlentities($_SESSION['msg']="");?>
-</div>
-</div>
-<?php } ?>
-
-
-
-   <?php if($_SESSION['delmsg']!="")
-    {?>
-<div class="col-md-6">
-<div class="alert alert-success" >
- <strong>Success :</strong> 
- <?php echo htmlentities($_SESSION['delmsg']);?>
-<?php echo htmlentities($_SESSION['delmsg']="");?>
-</div>
-</div>
-<?php } ?>
-
+    <?php echo lms_flash_render(); ?>
 </div>
 
 
@@ -85,7 +43,11 @@ else{
                     <!-- Advanced Tables -->
                     <div class="panel panel-default">
                         <div class="panel-heading">
-                          Issued Books 
+                          Issued Books
+                          &nbsp;|&nbsp;
+                          <a href="?filter=all">All</a> &middot;
+                          <a href="?filter=open">On loan</a> &middot;
+                          <a href="?filter=overdue">Overdue</a>
                         </div>
                         <div class="panel-body">
                             <div class="table-responsive">
@@ -97,40 +59,56 @@ else{
                                             <th>Book Name</th>
                                             <th>ISBN </th>
                                             <th>Issued Date</th>
-                                            <th>Return Date</th>
+                                            <th>Due Date</th>
+                                            <th>Status</th>
+                                            <th>Fine (INR)</th>
                                             <th>Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-<?php $sql = "SELECT tblstudents.FullName,tblbooks.BookName,tblbooks.ISBNNumber,tblissuedbookdetails.IssuesDate,tblissuedbookdetails.ReturnDate,tblissuedbookdetails.id as rid from  tblissuedbookdetails join tblstudents on tblstudents.StudentId=tblissuedbookdetails.StudentId join tblbooks on tblbooks.id=tblissuedbookdetails.BookId order by tblissuedbookdetails.id desc";
-$query = $dbh -> prepare($sql);
+<?php
+$filter = $_GET['filter'] ?? 'all';   // all | open | overdue
+$sql = "SELECT s.FullName, s.StudentId, b.BookName, b.ISBNNumber,
+               i.IssuesDate, i.ReturnDate, i.RetrunStatus, i.fine, i.id AS rid
+        FROM tblissuedbookdetails i
+        JOIN tblstudents s ON s.StudentId = i.StudentID
+        JOIN tblbooks b ON b.id = i.BookId
+        ORDER BY i.id DESC";
+$query = $dbh->prepare($sql);
 $query->execute();
-$results=$query->fetchAll(PDO::FETCH_OBJ);
-$cnt=1;
-if($query->rowCount() > 0)
-{
-foreach($results as $result)
-{               ?>                                      
+$cnt = 1;
+foreach ($query->fetchAll() as $result) {
+    $returned = (int) $result->RetrunStatus === 1;
+    $days     = $returned ? 0 : lms_days_overdue($result->IssuesDate);
+    if ($filter === 'open' && $returned) { continue; }
+    if ($filter === 'overdue' && ($returned || $days === 0)) { continue; }
+?>
                                         <tr class="odd gradeX">
-                                            <td class="center"><?php echo htmlentities($cnt);?></td>
-                                            <td class="center"><?php echo htmlentities($result->FullName);?></td>
-                                            <td class="center"><?php echo htmlentities($result->BookName);?></td>
-                                            <td class="center"><?php echo htmlentities($result->ISBNNumber);?></td>
-                                            <td class="center"><?php echo htmlentities($result->IssuesDate);?></td>
-                                            <td class="center"><?php if($result->ReturnDate=="")
-                                            {
-                                                echo htmlentities("Not Return Yet");
-                                            } else {
-                                            echo htmlentities($result->ReturnDate);
-}
-                                            ?></td>
+                                            <td class="center"><?php echo e($cnt); ?></td>
+                                            <td class="center"><?php echo e($result->FullName); ?> (<?php echo e($result->StudentId); ?>)</td>
+                                            <td class="center"><?php echo e($result->BookName); ?></td>
+                                            <td class="center"><?php echo e($result->ISBNNumber); ?></td>
+                                            <td class="center"><?php echo e($result->IssuesDate); ?></td>
+                                            <td class="center"><?php echo e(lms_due_date($result->IssuesDate)->format('d M Y')); ?></td>
                                             <td class="center">
-
-                                            <a href="update-issue-bookdeails.php?rid=<?php echo htmlentities($result->rid);?>"><button class="btn btn-primary"><i class="fa fa-edit "></i> Edit</button> 
-                                         
+                                            <?php if ($returned) { ?>
+                                                Returned on <?php echo e($result->ReturnDate); ?>
+                                            <?php } elseif ($days > 0) { ?>
+                                                <span style="color:red">Overdue by <?php echo e($days); ?> day(s)</span>
+                                            <?php } else { ?>
+                                                <span style="color:#3c763d">On loan</span>
+                                            <?php } ?>
+                                            </td>
+                                            <td class="center">
+                                                <?php echo e(number_format($returned ? (float) $result->fine : lms_calculate_fine($result->IssuesDate), 2)); ?>
+                                            </td>
+                                            <td class="center">
+                                                <a href="update-issue-bookdeails.php?rid=<?php echo e($result->rid); ?>" class="btn btn-primary">
+                                                    <i class="fa fa-edit"></i> <?php echo $returned ? 'View' : 'Return'; ?>
+                                                </a>
                                             </td>
                                         </tr>
- <?php $cnt=$cnt+1;}} ?>                                      
+<?php $cnt++; } ?>                                      
                                     </tbody>
                                 </table>
                             </div>
@@ -161,4 +139,3 @@ foreach($results as $result)
     <script src="assets/js/custom.js"></script>
 </body>
 </html>
-<?php } ?>

@@ -1,31 +1,39 @@
 <?php
-session_start();
-include('includes/config.php');
-error_reporting(0);
-if (strlen($_SESSION['login']) == 0) {
-    header('location:index.php');
-} else {
-    if (isset($_POST['submit'])) {
-        $studentId = $_SESSION['stdid'];
-        $bookTitle = $_POST['bookTitle'];
-        $author = $_POST['author'];
-        $suggestion = $_POST['suggestion']; // New variable to capture the suggestion
+require_once __DIR__ . '/includes/config.php';
+$studentId = lms_require_student();
 
-        // Insert the request into the tblrequest table
-        $sql = "INSERT INTO tblrequest (StudentId, BookTitle, Author, Suggestion) VALUES (:studentId, :bookTitle, :author, :suggestion)";
-        $query = $dbh->prepare($sql);
-        $query->bindParam(':studentId', $studentId, PDO::PARAM_STR);
-        $query->bindParam(':bookTitle', $bookTitle, PDO::PARAM_STR);
-        $query->bindParam(':author', $author, PDO::PARAM_STR);
-        $query->bindParam(':suggestion', $suggestion, PDO::PARAM_STR);
-        $query->execute();
+$error = '';
+$msg   = '';
 
-        echo '<script>alert("Your request has been submitted")</script>';
+if (isset($_POST['submit'])) {
+    lms_csrf_verify();
+    $bookTitle  = trim($_POST['bookTitle'] ?? '');
+    $author     = trim($_POST['author'] ?? '');
+    $suggestion = trim($_POST['suggestion'] ?? '');
+
+    if ($bookTitle === '' || $author === '') {
+        $error = 'Please give both a title and an author.';
+    } else {
+        $sql = "INSERT INTO tblrequest (StudentId, BookTitle, Author, Suggestion, IsApproved)
+                VALUES (:studentId, :bookTitle, :author, :suggestion, 'Pending')";
+        $dbh->prepare($sql)->execute([
+            ':studentId'  => $studentId,
+            ':bookTitle'  => $bookTitle,
+            ':author'     => $author,
+            ':suggestion' => $suggestion,
+        ]);
+        $msg = 'Your acquisition request has been sent to the librarian.';
     }
-    $sql = "SELECT * FROM tblrequest";
-    $query = $dbh->prepare($sql);
-    $query->execute();
-    $results = $query->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// A member sees their own requests only — the earlier version listed every
+// request in the system, which leaked what other members were reading.
+$query = $dbh->prepare(
+    "SELECT RequestId, BookTitle, Author, Suggestion, IsApproved, RequestDate
+     FROM tblrequest WHERE StudentId = :sid ORDER BY RequestId DESC"
+);
+$query->execute([':sid' => $studentId]);
+$results = $query->fetchAll();
 ?>
 
 <!DOCTYPE html>
@@ -47,7 +55,7 @@ if (strlen($_SESSION['login']) == 0) {
     <!-- CUSTOM STYLE  -->
     <link href="assets/css/style.css" rel="stylesheet" />
     <!-- GOOGLE FONT -->
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
 
 </head>
 
@@ -70,6 +78,12 @@ if (strlen($_SESSION['login']) == 0) {
                         </div>
                         <div class="panel-body">
                             <form name="bookrequest" method="post">
+                                <?php echo lms_csrf_field(); ?>
+                                <?php if ($error !== '') { ?>
+                                    <div class="alert alert-danger"><?php echo e($error); ?></div>
+                                <?php } elseif ($msg !== '') { ?>
+                                    <div class="alert alert-success"><?php echo e($msg); ?></div>
+                                <?php } ?>
                                 <div class="form-group">
                                     <label>Book Title</label>
                                     <input class="form-control" type="text" name="bookTitle" required />
@@ -96,7 +110,7 @@ if (strlen($_SESSION['login']) == 0) {
                 <div class="col-md-12">
                     <div class="panel panel-default">
                         <div class="panel-heading">
-                            Existing Book Requests
+                            My Book Requests
                         </div>
                         <div class="panel-body">
                             <div class="table-responsive">
@@ -104,23 +118,28 @@ if (strlen($_SESSION['login']) == 0) {
                                     <thead>
                                         <tr>
                                             <th>Request ID</th>
-                                            <th>Student ID</th>
+                                            <th>Requested On</th>
                                             <th>Book Title</th>
                                             <th>Author</th>
                                             <th>Suggestion</th>
-                                            <th>Approval Status</th>
+                                            <th>Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach ($results as $row) { ?>
+                                        <?php foreach ($results as $row) {
+                                            $badge = $row->IsApproved === 'Approved' ? 'label-success'
+                                                   : ($row->IsApproved === 'Not Approved' ? 'label-danger' : 'label-warning'); ?>
                                             <tr>
-                                                <td><?php echo $row['RequestId']; ?></td>
-                                                <td><?php echo $row['StudentId']; ?></td>
-                                                <td><?php echo $row['BookTitle']; ?></td>
-                                                <td><?php echo $row['Author']; ?></td>
-                                                <td><?php echo $row['Suggestion']; ?></td>
-                                                <td><?php echo $row['IsApproved']; ?></td>
+                                                <td><?php echo e($row->RequestId); ?></td>
+                                                <td><?php echo e($row->RequestDate); ?></td>
+                                                <td><?php echo e($row->BookTitle); ?></td>
+                                                <td><?php echo e($row->Author); ?></td>
+                                                <td><?php echo e($row->Suggestion); ?></td>
+                                                <td><span class="label <?php echo $badge; ?>"><?php echo e($row->IsApproved); ?></span></td>
                                             </tr>
+                                        <?php } ?>
+                                        <?php if (!$results) { ?>
+                                            <tr><td colspan="6" class="text-center">You have not requested any book yet.</td></tr>
                                         <?php } ?>
                                     </tbody>
                                 </table>
@@ -142,6 +161,3 @@ if (strlen($_SESSION['login']) == 0) {
 </body>
 
 </html>
-<?php
-}
-?>

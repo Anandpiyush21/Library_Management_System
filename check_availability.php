@@ -1,30 +1,24 @@
-<?php 
-require_once("includes/config.php");
-// code user email availablity
-if(!empty($_POST["emailid"])) {
-	$email= $_POST["emailid"];
-	if (filter_var($email, FILTER_VALIDATE_EMAIL)===false) {
+<?php
+/**
+ * AJAX endpoint: tell the signup form whether an e-mail is still free.
+ */
+require_once __DIR__ . '/includes/config.php';
 
-		echo "error : You did not enter a valid email.";
-	}
-	else {
-		$sql ="SELECT EmailId FROM tblstudents WHERE EmailId=:email";
-$query= $dbh -> prepare($sql);
-$query-> bindParam(':email', $email, PDO::PARAM_STR);
-$query-> execute();
-$results = $query -> fetchAll(PDO::FETCH_OBJ);
-$cnt=1;
-if($query -> rowCount() > 0)
-{
-echo "<span style='color:red'> Email already exists .</span>";
- echo "<script>$('#submit').prop('disabled',true);</script>";
-} else{
-	
-	echo "<span style='color:green'> Email available for Registration .</span>";
- echo "<script>$('#submit').prop('disabled',false);</script>";
-}
-}
+header('Content-Type: text/html; charset=utf-8');
+
+$email = trim($_POST['emailid'] ?? '');
+
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    exit('<span style="color:red"> Please enter a valid e-mail address.</span>');
 }
 
+$query = $dbh->prepare('SELECT 1 FROM tblstudents WHERE EmailId = :email LIMIT 1');
+$query->execute([':email' => $email]);
 
-?>
+if ($query->fetchColumn()) {
+    echo '<span style="color:red"> This e-mail address is already registered.</span>';
+    echo '<script>$("#submit").prop("disabled", true);</script>';
+} else {
+    echo '<span style="color:green"> This e-mail address is available.</span>';
+    echo '<script>$("#submit").prop("disabled", false);</script>';
+}

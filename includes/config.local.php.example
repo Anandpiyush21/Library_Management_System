@@ -1,0 +1,9 @@
+<?php
+/**
+ * Copy to includes/config.local.php and edit for this machine.
+ * The real file is gitignored, so credentials never reach the repository.
+ */
+define('DB_HOST', 'localhost');
+define('DB_USER', 'library_app');
+define('DB_PASS', 'change-me');
+define('DB_NAME', 'library');
